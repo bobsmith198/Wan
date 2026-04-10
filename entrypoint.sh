@@ -6,13 +6,13 @@ MODELS_DIR="$VOL/models"
 mkdir -p "$MODELS_DIR"
 
 # ── WAN model ─────────────────────────────────────────────────
-WAN_DEST="/ComfyUI/models/checkpoints/rapid/wan2.2-i2v-rapid-aio.safetensors"
-WAN_CACHE="$MODELS_DIR/wan2.2-i2v-rapid-aio.safetensors"
+WAN_DEST="/ComfyUI/models/checkpoints/rapid/wan2.2-rapid-mega-aio-nsfw-v9.safetensors"
+WAN_CACHE="$MODELS_DIR/wan2.2-rapid-mega-aio-nsfw-v9.safetensors"
 
 if [ ! -f "$WAN_CACHE" ]; then
     echo "Downloading WAN2.2 Rapid AIO model (~14GB, first run only)..."
     wget -q --show-progress \
-        "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/wan2.2-i2v-rapid-aio.safetensors" \
+        "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/Mega-v9/wan2.2-rapid-mega-aio-nsfw-v9.safetensors" \
         -O "$WAN_CACHE"
     echo "WAN model downloaded."
 else
