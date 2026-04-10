@@ -135,7 +135,7 @@ def handler(job):
     neg_prompt = inp.get('negative_prompt', '')
 
     # Node 26 — CheckpointLoaderSimple
-    prompt['26']['widgets_values'] = ['rapid/wan2.2-rapid-mega-aio-nsfw-v9.safetensors']
+    prompt['26']['widgets_values'] = ['rapid/wan2.2-rapid-mega-aio-nsfw-v12.safetensors']
 
     # Node 9 — Positive CLIPTextEncode
     prompt['9']['widgets_values'] = [pos_prompt]

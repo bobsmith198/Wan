@@ -1,4 +1,4 @@
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+FROM wlsdml1114/engui_genai-base_blackwell:1.1
 
 WORKDIR /
 
@@ -25,8 +25,8 @@ RUN mkdir -p /ComfyUI/models/checkpoints/rapid && \
     mkdir -p /ComfyUI/output
 
 RUN wget -q --show-progress \
-    "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/Mega-v9/wan2.2-rapid-mega-aio-nsfw-v9.safetensors" \
-    -O /ComfyUI/models/checkpoints/rapid/wan2.2-rapid-mega-aio-nsfw-v9.safetensors
+    "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/Mega-v12/wan2.2-rapid-mega-aio-nsfw-v12.safetensors" \
+    -O /ComfyUI/models/checkpoints/rapid/wan2.2-rapid-mega-aio-nsfw-v12.safetensors
 
 COPY handler.py /handler.py
 COPY workflow.json /workflow.json
