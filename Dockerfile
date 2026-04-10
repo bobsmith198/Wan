@@ -31,14 +31,17 @@ RUN mkdir -p /ComfyUI/models/checkpoints/rapid && \
 
 # Download WAN model at build time
 RUN wget -q --show-progress \
+    --no-check-certificate \
     "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/Mega-v9/wan2.2-rapid-mega-aio-nsfw-v9.safetensors" \
     -O /ComfyUI/models/checkpoints/rapid/wan2.2-rapid-mega-aio-nsfw-v9.safetensors
 
 # Download CLIP vision model at build time
+# Download CLIP vision model at build time
 RUN wget -q --show-progress \
+    --no-check-certificate \
     "https://huggingface.co/Comfy-Org/clip_vision_g/resolve/main/clip_vision_g.safetensors" \
     -O /ComfyUI/models/clip_vision/clip_vision_g.safetensors
-
+    
 COPY handler.py /handler.py
 COPY workflow_i2v.json /workflow_i2v.json
 COPY entrypoint.sh /entrypoint.sh

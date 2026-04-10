@@ -330,7 +330,7 @@
         "Node name for S&R": "CheckpointLoaderSimple"
       },
       "widgets_values": [
-        "rapid/wan2.2-i2v-rapid-aio.safetensors"
+        "rapid/wan2.2-rapid-mega-aio-nsfw-v9.safetensors"
       ]
     },
     {
