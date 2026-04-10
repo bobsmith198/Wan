@@ -20,8 +20,8 @@ COMFY_URL      = f"http://{SERVER_ADDRESS}:8188"
 WS_URL         = f"ws://{SERVER_ADDRESS}:8188/ws?clientId={CLIENT_ID}"
 COMFY_INPUT    = "/ComfyUI/input"
 
-def wait_for_comfyui(timeout=600):
-    logger.info("Waiting for ComfyUI (may take longer on first run while models download)...")
+def wait_for_comfyui(timeout=300):
+    logger.info("Waiting for ComfyUI...")
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -29,7 +29,7 @@ def wait_for_comfyui(timeout=600):
             logger.info("ComfyUI ready")
             return
         except:
-            time.sleep(3)
+            time.sleep(2)
     raise Exception("ComfyUI did not start in time")
 
 def to_multiple_of_16(v):
@@ -87,9 +87,8 @@ def run_workflow(ws, prompt):
         if isinstance(msg, str):
             data = json.loads(msg)
             if data.get('type') == 'executing':
-                node = data['data'].get('node')
-                pid  = data['data'].get('prompt_id')
-                if node is None and pid == prompt_id:
+                if data['data'].get('node') is None and \
+                   data['data'].get('prompt_id') == prompt_id:
                     break
     history = get_history(prompt_id)[prompt_id]
     for node_id, node_output in history['outputs'].items():
@@ -111,75 +110,78 @@ def handler(job):
     start_image = resolve_image(inp,
         'image_path', 'image_url', 'image_base64',
         task_id, 'start.jpg')
-    if not start_image:
-        return {'error': 'No input image provided'}
 
     end_image = resolve_image(inp,
         'end_image_path', 'end_image_url', 'end_image_base64',
         task_id, 'end.jpg')
 
-    flf2v = end_image is not None
-    logger.info(f"Mode: {'FLF2V' if flf2v else 'I2V'}")
+    # Determine mode
+    t2v   = start_image is None and end_image is None
+    flf2v = start_image is not None and end_image is not None
+    i2v   = start_image is not None and end_image is None
+    logger.info(f"Mode: {'T2V' if t2v else 'FLF2V' if flf2v else 'I2V'}")
 
-    prompt = load_workflow('/workflow_i2v.json')
+    prompt = load_workflow('/workflow.json')
 
-    width     = to_multiple_of_16(inp.get('width',  480))
-    height    = to_multiple_of_16(inp.get('height', 832))
+    width     = to_multiple_of_16(inp.get('width',  768))
+    height    = to_multiple_of_16(inp.get('height', 768))
     length    = int(inp.get('length',   81))
     steps     = int(inp.get('steps',     4))
     seed      = int(inp.get('seed',     42))
     cfg       = float(inp.get('cfg',   1.0))
-    sampler   = inp.get('sampler',   'sa_solver')
+    sampler   = inp.get('sampler',   'ipndm')
     scheduler = inp.get('scheduler', 'beta')
     pos_prompt = inp.get('prompt', '')
     neg_prompt = inp.get('negative_prompt', '')
 
-    # Node 1 — CheckpointLoaderSimple
-    prompt['1']['widgets_values'] = ['rapid/wan2.2-i2v-rapid-aio.safetensors']
+    # Node 26 — CheckpointLoaderSimple
+    prompt['26']['widgets_values'] = ['rapid/wan2.2-rapid-mega-aio-nsfw-v9.safetensors']
 
-    # Node 5 — Positive CLIPTextEncode
-    prompt['5']['widgets_values'] = [pos_prompt]
+    # Node 9 — Positive CLIPTextEncode
+    prompt['9']['widgets_values'] = [pos_prompt]
 
-    # Node 4 — Negative CLIPTextEncode
-    prompt['4']['widgets_values'] = [neg_prompt]
+    # Node 10 — Negative CLIPTextEncode
+    prompt['10']['widgets_values'] = [neg_prompt]
 
-    # Node 10 — LoadImage start frame
-    prompt['10']['widgets_values'] = [start_image, 'image']
+    # Node 48 — PrimitiveInt num frames
+    prompt['48']['widgets_values'] = [length, 'fixed']
 
-    # Node 9 — WanImageToVideo (width, height, length, noise_aug)
-    prompt['9']['widgets_values'] = [width, height, length, 1]
+    # Node 32 — ModelSamplingSD3 shift
+    prompt['32']['widgets_values'] = [8]
 
-    # Node 3 — KSampler
-    prompt['3']['widgets_values'] = [seed, 'fixed', steps, cfg, sampler, scheduler, 1]
+    # Node 8 — KSampler
+    prompt['8']['widgets_values'] = [seed, 'fixed', steps, cfg, sampler, scheduler, 1]
 
-    # Node 2 — ModelSamplingSD3 shift
-    prompt['2']['widgets_values'] = [8.0]
+    # Node 28 — WanVaceToVideo (width, height, length, strength, padding)
+    # strength=1 for I2V/FLF2V, strength=0 for T2V
+    vace_strength = 0 if t2v else 1
+    prompt['28']['widgets_values'] = [width, height, length, vace_strength, 1]
 
-    # FLF2V — inject end image as extra LoadImage node
-    if flf2v and end_image:
-        max_id    = str(max(int(k) for k in prompt.keys()) + 1)
-        end_link  = 99
-        prompt[max_id] = {
-            "inputs": [],
-            "outputs": [{"name": "IMAGE", "type": "IMAGE",
-                         "links": [end_link], "slot_index": 0}],
-            "class_type": "LoadImage",
-            "widgets_values": [end_image, "image"]
-        }
-        node9_inputs = prompt['9'].get('inputs', [])
-        has_end = any(i.get('name') == 'end_image' for i in node9_inputs)
-        if not has_end:
-            node9_inputs.append({
-                "name": "end_image", "type": "IMAGE",
-                "link": end_link, "shape": 7
-            })
-        logger.info(f"FLF2V: end image node {max_id} wired")
+    # Node 16 — Start frame LoadImage
+    # mode 0 = active, mode 4 = bypassed
+    if start_image:
+        prompt['16']['mode'] = 0
+        prompt['16']['widgets_values'] = [start_image, 'image']
+    else:
+        prompt['16']['mode'] = 4
+
+    # Node 37 — End frame LoadImage
+    if end_image:
+        prompt['37']['mode'] = 0
+        prompt['37']['widgets_values'] = [end_image, 'image']
+    else:
+        prompt['37']['mode'] = 4
+
+    # Node 34 — WanVideoVACEStartToEndFrame
+    # bypass for T2V, active for I2V and FLF2V
+    prompt['34']['mode'] = 4 if t2v else 0
 
     # LoRA pairs
     lora_pairs = inp.get('lora_pairs', [])[:4]
     if lora_pairs:
-        logger.info(f"LoRA pairs: {len(lora_pairs)} — ensure files in /runpod-volume/loras/")
+        logger.info(f"LoRA pairs: {len(lora_pairs)} — ensure files in /ComfyUI/models/loras/")
 
+    # Connect WebSocket
     ws = websocket.WebSocket()
     for attempt in range(10):
         try:
