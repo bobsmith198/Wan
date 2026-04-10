@@ -19,7 +19,6 @@ python main.py \
     --port 8188 \
     --disable-auto-launch \
     --gpu-only \
-    --lowvram \
     &
 
 echo "Starting RunPod handler..."
