@@ -10,6 +10,7 @@ import subprocess
 import binascii
 import time
 import shutil
+import copy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,6 +20,12 @@ CLIENT_ID      = str(uuid.uuid4())
 COMFY_URL      = f"http://{SERVER_ADDRESS}:8188"
 WS_URL         = f"ws://{SERVER_ADDRESS}:8188/ws?clientId={CLIENT_ID}"
 COMFY_INPUT    = "/ComfyUI/input"
+
+# 1x1 white PNG — dummy frame for T2V so LoadImage nodes don't error
+BLANK_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
+    "z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg=="
+)
 
 def wait_for_comfyui(timeout=300):
     logger.info("Waiting for ComfyUI...")
@@ -71,10 +78,22 @@ def resolve_image(inp, key_path, key_url, key_b64, task_id, filename):
         return os.path.basename(out)
     return None
 
+def write_blank(task_id):
+    path = os.path.join(COMFY_INPUT, f"{task_id}_blank.png")
+    os.makedirs(COMFY_INPUT, exist_ok=True)
+    save_base64(BLANK_B64, path)
+    return os.path.basename(path)
+
 def queue_prompt(prompt):
-    data = json.dumps({"prompt": prompt, "client_id": CLIENT_ID}).encode()
-    req  = urllib.request.Request(f"{COMFY_URL}/prompt", data=data)
-    return json.loads(urllib.request.urlopen(req).read())
+    data   = json.dumps({"prompt": prompt, "client_id": CLIENT_ID}).encode()
+    req    = urllib.request.Request(f"{COMFY_URL}/prompt", data=data)
+    result = json.loads(urllib.request.urlopen(req).read())
+    if 'error' in result:
+        raise Exception(
+            f"ComfyUI error: {result['error']} | "
+            f"node errors: {result.get('node_errors', {})}"
+        )
+    return result
 
 def get_history(prompt_id):
     with urllib.request.urlopen(f"{COMFY_URL}/history/{prompt_id}") as r:
@@ -115,66 +134,61 @@ def handler(job):
         'end_image_path', 'end_image_url', 'end_image_base64',
         task_id, 'end.jpg')
 
-    # Determine mode
     t2v   = start_image is None and end_image is None
     flf2v = start_image is not None and end_image is not None
     i2v   = start_image is not None and end_image is None
     logger.info(f"Mode: {'T2V' if t2v else 'FLF2V' if flf2v else 'I2V'}")
 
-    prompt = load_workflow('/workflow.json')
+    prompt = copy.deepcopy(load_workflow('/workflow.json'))
 
-    width     = to_multiple_of_16(inp.get('width',  768))
-    height    = to_multiple_of_16(inp.get('height', 768))
-    length    = int(inp.get('length',   81))
-    steps     = int(inp.get('steps',     4))
-    seed      = int(inp.get('seed',     42))
-    cfg       = float(inp.get('cfg',   1.0))
-    sampler   = inp.get('sampler',   'ipndm')
-    scheduler = inp.get('scheduler', 'beta')
+    width      = to_multiple_of_16(inp.get('width',  768))
+    height     = to_multiple_of_16(inp.get('height', 768))
+    length     = int(inp.get('length',   81))
+    steps      = int(inp.get('steps',     4))
+    seed       = int(inp.get('seed',     42))
+    cfg        = float(inp.get('cfg',   1.0))
+    sampler    = inp.get('sampler',   'ipndm')
+    scheduler  = inp.get('scheduler', 'beta')
     pos_prompt = inp.get('prompt', '')
     neg_prompt = inp.get('negative_prompt', '')
 
-    # Node 26 — CheckpointLoaderSimple
-    prompt['26']['widgets_values'] = ['rapid/wan2.2-rapid-mega-aio-nsfw-v12.safetensors']
+    # ── Standard patches ─────────────────────────────────────
+    prompt['26']['inputs']['ckpt_name']   = 'rapid/wan2.2-rapid-mega-aio-nsfw-v12.safetensors'
+    prompt['9']['inputs']['text']         = pos_prompt
+    prompt['10']['inputs']['text']        = neg_prompt
+    prompt['48']['inputs']['value']       = length
+    prompt['32']['inputs']['shift']       = 8
+    prompt['8']['inputs']['seed']         = seed
+    prompt['8']['inputs']['steps']        = steps
+    prompt['8']['inputs']['cfg']          = cfg
+    prompt['8']['inputs']['sampler_name'] = sampler
+    prompt['8']['inputs']['scheduler']    = scheduler
+    prompt['8']['inputs']['denoise']      = 1
+    prompt['28']['inputs']['width']       = width
+    prompt['28']['inputs']['height']      = height
 
-    # Node 9 — Positive CLIPTextEncode
-    prompt['9']['widgets_values'] = [pos_prompt]
+    # ── Mode patches ──────────────────────────────────────────
+    blank = None
 
-    # Node 10 — Negative CLIPTextEncode
-    prompt['10']['widgets_values'] = [neg_prompt]
+    if t2v:
+        # strength=0 — WanVaceToVideo ignores control entirely
+        # LoadImage nodes still need a valid file so ComfyUI doesn't reject
+        prompt['28']['inputs']['strength'] = 0
+        blank = write_blank(task_id)
+        prompt['16']['inputs']['image'] = blank
+        prompt['37']['inputs']['image'] = blank
 
-    # Node 48 — PrimitiveInt num frames
-    prompt['48']['widgets_values'] = [length, 'fixed']
+    elif i2v:
+        # strength=1, start frame drives motion, end frame = same image (ignored)
+        prompt['28']['inputs']['strength'] = 1
+        prompt['16']['inputs']['image']    = start_image
+        prompt['37']['inputs']['image']    = start_image
 
-    # Node 32 — ModelSamplingSD3 shift
-    prompt['32']['widgets_values'] = [8]
-
-    # Node 8 — KSampler
-    prompt['8']['widgets_values'] = [seed, 'fixed', steps, cfg, sampler, scheduler, 1]
-
-    # Node 28 — WanVaceToVideo (width, height, length, strength, padding)
-    # strength=1 for I2V/FLF2V, strength=0 for T2V
-    vace_strength = 0 if t2v else 1
-    prompt['28']['widgets_values'] = [width, height, length, vace_strength, 1]
-
-    # Node 16 — Start frame LoadImage
-    # mode 0 = active, mode 4 = bypassed
-    if start_image:
-        prompt['16']['mode'] = 0
-        prompt['16']['widgets_values'] = [start_image, 'image']
-    else:
-        prompt['16']['mode'] = 4
-
-    # Node 37 — End frame LoadImage
-    if end_image:
-        prompt['37']['mode'] = 0
-        prompt['37']['widgets_values'] = [end_image, 'image']
-    else:
-        prompt['37']['mode'] = 4
-
-    # Node 34 — WanVideoVACEStartToEndFrame
-    # bypass for T2V, active for I2V and FLF2V
-    prompt['34']['mode'] = 4 if t2v else 0
+    elif flf2v:
+        # strength=1, both frames guide the generation
+        prompt['28']['inputs']['strength'] = 1
+        prompt['16']['inputs']['image']    = start_image
+        prompt['37']['inputs']['image']    = end_image
 
     # LoRA pairs
     lora_pairs = inp.get('lora_pairs', [])[:4]
@@ -198,7 +212,8 @@ def handler(job):
         video_b64 = run_workflow(ws, prompt)
     finally:
         ws.close()
-        for fname in [start_image, end_image]:
+        # Cleanup temp input files
+        for fname in [start_image, end_image, blank]:
             if fname:
                 fp = os.path.join(COMFY_INPUT, fname)
                 if os.path.exists(fp):
