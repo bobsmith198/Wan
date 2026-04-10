@@ -1,11 +1,12 @@
 # rapid-wan — RunPod Serverless Worker
 
-WAN2.2-14B-Rapid-AllInOne image-to-video generation on RunPod.
+WAN2.2-14B-Rapid-AllInOne image-to-video on RunPod Serverless.
+Models are downloaded to network volume on first run and cached.
 
-## Key differences from standard WAN
-- Single checkpoint (no separate VAE/CLIP)
-- 4 steps at cfg=1 (2-3x faster than standard)
-- sa_solver/beta sampler recommended
+## Setup
+- Attach a network volume (recommended 30GB+)
+- First cold start downloads ~14GB of models
+- Subsequent starts symlink from volume — fast
 
 ## Input
 ```json
@@ -26,15 +27,13 @@ WAN2.2-14B-Rapid-AllInOne image-to-video generation on RunPod.
 }
 ```
 
-## FLF2V (first/last frame)
-Add `end_image_url`, `end_image_base64`, or `end_image_path` to guide motion toward an end state.
+## FLF2V
+Add end_image_url / end_image_base64 / end_image_path to guide
+motion toward a specific end state.
 
 ## LoRAs
-Upload `.safetensors` files to `/runpod-volume/loras/` on your network volume.
-They are auto-linked into `/ComfyUI/models/loras/` on startup.
+Upload .safetensors files to /loras/ on your network volume.
+Auto-linked on startup.
 
-## Deploy
-1. Push this repo to GitHub
-2. Create RunPod Serverless endpoint → select GitHub repo
-3. Set GPU to 24GB+ (A100 recommended, works on 16GB too)
-4. Attach your network volume if using LoRAs
+## Container disk
+Set to 20GB — models live on network volume not in container.

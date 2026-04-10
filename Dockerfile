@@ -20,23 +20,14 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
     pip install -r ComfyUI-VideoHelperSuite/requirements.txt
 
 # RunPod + websocket
-RUN pip install runpod websocket-client huggingface_hub
+RUN pip install runpod websocket-client
 
-# Download model
-RUN mkdir -p /ComfyUI/models/checkpoints/rapid
-RUN huggingface-cli download \
-    Phr00t/WAN2.2-14B-Rapid-AllInOne \
-    wan2.2-i2v-rapid-aio.safetensors \
-    --local-dir /ComfyUI/models/checkpoints/rapid \
-    --local-dir-use-symlinks False
-
-# Download CLIP vision model
-RUN mkdir -p /ComfyUI/models/clip_vision
-RUN huggingface-cli download \
-    Comfy-Org/clip_vision_g \
-    clip_vision_g.safetensors \
-    --local-dir /ComfyUI/models/clip_vision \
-    --local-dir-use-symlinks False
+# Create model dirs — models downloaded at runtime via entrypoint
+RUN mkdir -p /ComfyUI/models/checkpoints/rapid && \
+    mkdir -p /ComfyUI/models/clip_vision && \
+    mkdir -p /ComfyUI/models/loras && \
+    mkdir -p /ComfyUI/input && \
+    mkdir -p /ComfyUI/output
 
 COPY handler.py /handler.py
 COPY workflow_i2v.json /workflow_i2v.json

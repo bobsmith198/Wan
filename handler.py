@@ -6,7 +6,6 @@ import json
 import uuid
 import logging
 import urllib.request
-import urllib.parse
 import subprocess
 import binascii
 import time
@@ -21,8 +20,8 @@ COMFY_URL      = f"http://{SERVER_ADDRESS}:8188"
 WS_URL         = f"ws://{SERVER_ADDRESS}:8188/ws?clientId={CLIENT_ID}"
 COMFY_INPUT    = "/ComfyUI/input"
 
-def wait_for_comfyui(timeout=300):
-    logger.info("Waiting for ComfyUI...")
+def wait_for_comfyui(timeout=600):
+    logger.info("Waiting for ComfyUI (may take longer on first run while models download)...")
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -30,7 +29,7 @@ def wait_for_comfyui(timeout=300):
             logger.info("ComfyUI ready")
             return
         except:
-            time.sleep(2)
+            time.sleep(3)
     raise Exception("ComfyUI did not start in time")
 
 def to_multiple_of_16(v):
@@ -138,10 +137,10 @@ def handler(job):
     # Node 1 — CheckpointLoaderSimple
     prompt['1']['widgets_values'] = ['rapid/wan2.2-i2v-rapid-aio.safetensors']
 
-    # Node 5 — Positive prompt
+    # Node 5 — Positive CLIPTextEncode
     prompt['5']['widgets_values'] = [pos_prompt]
 
-    # Node 4 — Negative prompt
+    # Node 4 — Negative CLIPTextEncode
     prompt['4']['widgets_values'] = [neg_prompt]
 
     # Node 10 — LoadImage start frame
@@ -156,27 +155,30 @@ def handler(job):
     # Node 2 — ModelSamplingSD3 shift
     prompt['2']['widgets_values'] = [8.0]
 
-    # FLF2V — inject end image as a second LoadImage node
+    # FLF2V — inject end image as extra LoadImage node
     if flf2v and end_image:
-        max_id = str(max(int(k) for k in prompt.keys()) + 1)
-        end_link_id = 99
+        max_id    = str(max(int(k) for k in prompt.keys()) + 1)
+        end_link  = 99
         prompt[max_id] = {
             "inputs": [],
-            "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [end_link_id], "slot_index": 0}],
+            "outputs": [{"name": "IMAGE", "type": "IMAGE",
+                         "links": [end_link], "slot_index": 0}],
             "class_type": "LoadImage",
             "widgets_values": [end_image, "image"]
         }
-        # Wire end_image into WanImageToVideo node 9
         node9_inputs = prompt['9'].get('inputs', [])
         has_end = any(i.get('name') == 'end_image' for i in node9_inputs)
         if not has_end:
-            node9_inputs.append({"name": "end_image", "type": "IMAGE", "link": end_link_id})
+            node9_inputs.append({
+                "name": "end_image", "type": "IMAGE",
+                "link": end_link, "shape": 7
+            })
         logger.info(f"FLF2V: end image node {max_id} wired")
 
     # LoRA pairs
     lora_pairs = inp.get('lora_pairs', [])[:4]
     if lora_pairs:
-        logger.warning("LoRA pairs provided — ensure files are in /ComfyUI/models/loras/")
+        logger.info(f"LoRA pairs: {len(lora_pairs)} — ensure files in /runpod-volume/loras/")
 
     ws = websocket.WebSocket()
     for attempt in range(10):

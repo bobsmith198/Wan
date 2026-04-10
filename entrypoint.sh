@@ -1,14 +1,52 @@
 #!/bin/bash
 set -e
 
-# Link LoRAs from network volume if present
-if [ -d "/runpod-volume/loras" ]; then
+VOL="/runpod-volume"
+MODELS_DIR="$VOL/models"
+mkdir -p "$MODELS_DIR"
+
+# ── WAN model ─────────────────────────────────────────────────
+WAN_DEST="/ComfyUI/models/checkpoints/rapid/wan2.2-i2v-rapid-aio.safetensors"
+WAN_CACHE="$MODELS_DIR/wan2.2-i2v-rapid-aio.safetensors"
+
+if [ ! -f "$WAN_CACHE" ]; then
+    echo "Downloading WAN2.2 Rapid AIO model (~14GB, first run only)..."
+    wget -q --show-progress \
+        "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/wan2.2-i2v-rapid-aio.safetensors" \
+        -O "$WAN_CACHE"
+    echo "WAN model downloaded."
+else
+    echo "WAN model found in cache."
+fi
+ln -sf "$WAN_CACHE" "$WAN_DEST"
+
+# ── CLIP vision model ──────────────────────────────────────────
+CLIP_DEST="/ComfyUI/models/clip_vision/clip_vision_g.safetensors"
+CLIP_CACHE="$MODELS_DIR/clip_vision_g.safetensors"
+
+if [ ! -f "$CLIP_CACHE" ]; then
+    echo "Downloading CLIP vision model..."
+    wget -q --show-progress \
+        "https://huggingface.co/Comfy-Org/clip_vision_g/resolve/main/clip_vision_g.safetensors" \
+        -O "$CLIP_CACHE"
+    echo "CLIP model downloaded."
+else
+    echo "CLIP model found in cache."
+fi
+ln -sf "$CLIP_CACHE" "$CLIP_DEST"
+
+# ── LoRAs from network volume ──────────────────────────────────
+if [ -d "$VOL/loras" ]; then
+    echo "Linking LoRAs from network volume..."
     mkdir -p /ComfyUI/models/loras
-    ln -sf /runpod-volume/loras/* /ComfyUI/models/loras/ 2>/dev/null || true
-    echo "LoRAs linked from network volume"
+    for f in "$VOL/loras"/*; do
+        [ -f "$f" ] && ln -sf "$f" "/ComfyUI/models/loras/$(basename $f)" 2>/dev/null || true
+    done
+    echo "LoRAs linked."
 fi
 
-echo "Starting ComfyUI on port 8188..."
+# ── Start ComfyUI ──────────────────────────────────────────────
+echo "Starting ComfyUI..."
 cd /ComfyUI
 python main.py \
     --listen 127.0.0.1 \
