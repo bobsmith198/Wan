@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-# ── Link LoRAs from network volume ────────────────────────────
+# Fix typing_extensions conflict
+pip install --upgrade typing_extensions sqlalchemy -q
+
+# Link LoRAs from network volume
 if [ -d "/runpod-volume/loras" ]; then
     echo "Linking LoRAs from network volume..."
     mkdir -p /ComfyUI/models/loras
@@ -11,7 +14,6 @@ if [ -d "/runpod-volume/loras" ]; then
     echo "LoRAs linked."
 fi
 
-# ── Start ComfyUI ─────────────────────────────────────────────
 echo "Starting ComfyUI..."
 cd /ComfyUI
 python main.py \
