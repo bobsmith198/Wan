@@ -192,31 +192,41 @@ def handler(job):
 
     # LoRA pairs
     # ── LoRA pairs — patch nodes 56, 57, 58 ──────────────────────
+    # ── LoRA pairs — patch nodes 56, 57, 58 ──────────────────────
     lora_nodes = ['56', '57', '58']
     lora_pairs = inp.get('lora_pairs', [])
-    
-    for i, node_id in enumerate(lora_nodes):
-        if i < len(lora_pairs):
-            pair = lora_pairs[i]
-            # Use the 'low' lora as recommended
-            lora_name   = pair.get('low', '')
-            lora_weight = float(pair.get('low_weight', 1.0))
-            prompt[node_id]['inputs']['lora_name']      = lora_name
-            prompt[node_id]['inputs']['strength_model'] = lora_weight
-            logger.info(f"LoRA slot {i+1}: {lora_name} @ {lora_weight}")
-        else:
-            # No LoRA for this slot — set empty name and weight 0
-            # so the loader passes through without effect
-            prompt[node_id]['inputs']['lora_name']      = ''
-            prompt[node_id]['inputs']['strength_model'] = 0.0
-            logger.info(f"LoRA slot {i+1}: empty (passthrough)")
-    # If no loras at all, remove the lora nodes from the prompt
-  # and reconnect node 32 directly to node 26
+
     if not lora_pairs:
+        # No LoRAs — bypass entire chain, connect node 32 directly to node 26
         prompt['32']['inputs']['model'] = ['26', 0]
         del prompt['56']
         del prompt['57']
         del prompt['58']
+        logger.info("No LoRAs — bypassing LoRA chain")
+    else:
+        # Patch slots that have a LoRA
+        for i, node_id in enumerate(lora_nodes):
+            if i < len(lora_pairs):
+                pair        = lora_pairs[i]
+                lora_name   = pair.get('low', '') or pair.get('high', '')
+                lora_weight = float(pair.get('low_weight', pair.get('high_weight', 1.0)))
+                prompt[node_id]['inputs']['lora_name']      = lora_name
+                prompt[node_id]['inputs']['strength_model'] = lora_weight
+                logger.info(f"LoRA slot {i+1}: {lora_name} @ {lora_weight}")
+            else:
+                # Unused slot — bypass it by rewiring the chain around it
+                # Find what feeds into this node and connect it to next node
+                prev_model = prompt[node_id]['inputs']['model']
+                # Find the next node in chain and redirect it to skip this node
+                next_nodes = {'56': '57', '57': '58', '58': None}
+                next_id = next_nodes[node_id]
+                if next_id and next_id in prompt:
+                    prompt[next_id]['inputs']['model'] = prev_model
+                elif node_id == '58':
+                    # Last node — redirect node 32 to skip this one
+                    prompt['32']['inputs']['model'] = prev_model
+                del prompt[node_id]
+                logger.info(f"LoRA slot {i+1}: unused — bypassed")
     # Connect WebSocket
     ws = websocket.WebSocket()
     for attempt in range(10):
