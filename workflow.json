@@ -127,9 +127,9 @@
   },
   "32": {
     "inputs": {
-      "shift": 8,
+      "shift": 7.99,
       "model": [
-        "26",
+        "58",
         0
       ]
     },
@@ -199,6 +199,48 @@
     "class_type": "PrimitiveInt",
     "_meta": {
       "title": "Number of Frames"
+    }
+  },
+  "56": {
+    "inputs": {
+      "lora_name": "2511-AnyPose-base-000006250.safetensors",
+      "strength_model": 1,
+      "model": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "57": {
+    "inputs": {
+      "lora_name": "2511-AnyPose-base-000006250.safetensors",
+      "strength_model": 1,
+      "model": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "58": {
+    "inputs": {
+      "lora_name": "2511-AnyPose-base-000006250.safetensors",
+      "strength_model": 1,
+      "model": [
+        "57",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
     }
   }
 }

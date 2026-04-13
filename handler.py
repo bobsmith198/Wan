@@ -191,10 +191,32 @@ def handler(job):
         prompt['37']['inputs']['image']    = end_image
 
     # LoRA pairs
-    lora_pairs = inp.get('lora_pairs', [])[:4]
-    if lora_pairs:
-        logger.info(f"LoRA pairs: {len(lora_pairs)} — ensure files in /ComfyUI/models/loras/")
-
+    # ── LoRA pairs — patch nodes 56, 57, 58 ──────────────────────
+    lora_nodes = ['56', '57', '58']
+    lora_pairs = inp.get('lora_pairs', [])
+    
+    for i, node_id in enumerate(lora_nodes):
+        if i < len(lora_pairs):
+            pair = lora_pairs[i]
+            # Use the 'low' lora as recommended
+            lora_name   = pair.get('low', '')
+            lora_weight = float(pair.get('low_weight', 1.0))
+            prompt[node_id]['inputs']['lora_name']      = lora_name
+            prompt[node_id]['inputs']['strength_model'] = lora_weight
+            logger.info(f"LoRA slot {i+1}: {lora_name} @ {lora_weight}")
+        else:
+            # No LoRA for this slot — set empty name and weight 0
+            # so the loader passes through without effect
+            prompt[node_id]['inputs']['lora_name']      = ''
+            prompt[node_id]['inputs']['strength_model'] = 0.0
+            logger.info(f"LoRA slot {i+1}: empty (passthrough)")
+    # If no loras at all, remove the lora nodes from the prompt
+  # and reconnect node 32 directly to node 26
+    if not lora_pairs:
+        prompt['32']['inputs']['model'] = ['26', 0]
+        del prompt['56']
+        del prompt['57']
+        del prompt['58']
     # Connect WebSocket
     ws = websocket.WebSocket()
     for attempt in range(10):
