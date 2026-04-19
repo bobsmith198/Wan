@@ -87,7 +87,12 @@ def write_blank(task_id):
 def queue_prompt(prompt):
     data   = json.dumps({"prompt": prompt, "client_id": CLIENT_ID}).encode()
     req    = urllib.request.Request(f"{COMFY_URL}/prompt", data=data)
-    result = json.loads(urllib.request.urlopen(req).read())
+    try:
+        result = json.loads(urllib.request.urlopen(req).read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        logger.error(f"ComfyUI rejected prompt — status {e.code}: {body}")
+        raise Exception(f"ComfyUI 400: {body}")
     if 'error' in result:
         raise Exception(
             f"ComfyUI error: {result['error']} | "
