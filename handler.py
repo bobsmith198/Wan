@@ -154,6 +154,7 @@ def handler(job):
     cfg        = float(inp.get('cfg',   1.0))
     sampler    = inp.get('sampler',   'ipndm')
     scheduler  = inp.get('scheduler', 'beta')
+    denoise    = float(inp.get('denoise', 1.0))
     pos_prompt = inp.get('prompt', '')
     neg_prompt = inp.get('negative_prompt', '')
 
@@ -168,7 +169,7 @@ def handler(job):
     prompt['8']['inputs']['cfg']          = cfg
     prompt['8']['inputs']['sampler_name'] = sampler
     prompt['8']['inputs']['scheduler']    = scheduler
-    prompt['8']['inputs']['denoise']      = 1
+    prompt['8']['inputs']['denoise']      = denoise
     prompt['28']['inputs']['width']       = width
     prompt['28']['inputs']['height']      = height
 
