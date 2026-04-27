@@ -32,6 +32,6 @@ COPY handler.py /handler.py
 COPY workflow.json /workflow.json
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
+COPY extra_model_paths.yaml /ComfyUI/extra_model_paths.yaml
 WORKDIR /
 CMD ["/entrypoint.sh"]
