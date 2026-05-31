@@ -159,7 +159,7 @@ def handler(job):
     neg_prompt = inp.get('negative_prompt', '')
 
     # ── Standard patches ─────────────────────────────────────
-    prompt['26']['inputs']['ckpt_name']   = 'rapid/wan2.2-rapid-mega-aio-nsfw-v12.safetensors'
+    prompt['26']['inputs']['ckpt_name']   = 'wan2.2-rapid-mega-aio-nsfw-v12.safetensors'
     prompt['9']['inputs']['text']         = pos_prompt
     prompt['10']['inputs']['text']        = neg_prompt
     prompt['48']['inputs']['value']       = length

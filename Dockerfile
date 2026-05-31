@@ -19,14 +19,13 @@ RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
 
 RUN pip install runpod websocket-client
 
-RUN mkdir -p /ComfyUI/models/checkpoints/rapid && \
+RUN mkdir -p /ComfyUI/models/checkpoints && \
     mkdir -p /ComfyUI/models/loras && \
     mkdir -p /ComfyUI/input && \
     mkdir -p /ComfyUI/output
 
-RUN wget -q --show-progress \
-    "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/Mega-v12/wan2.2-rapid-mega-aio-nsfw-v12.safetensors" \
-    -O /ComfyUI/models/checkpoints/rapid/wan2.2-rapid-mega-aio-nsfw-v12.safetensors
+# Model lives on the network volume at /runpod-volume/loras/
+# No download needed — volume is mounted automatically by RunPod
 
 COPY handler.py /handler.py
 COPY workflow.json /workflow.json
